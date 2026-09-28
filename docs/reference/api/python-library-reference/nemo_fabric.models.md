@@ -1697,6 +1697,88 @@ Return a detached JSON-compatible mapping for Rust/core calls.
 ---
 
 
+## <kbd>class</kbd> `RelayOpenTelemetryFileSinkConfig`
+
+One local-file NeMo Relay OpenTelemetry destination.
+
+
+
+### Fields
+
+The model defines the following fields:
+
+| Field | Type | Required | Default | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `type` | `Literal['full', 'gen_ai', 'openinference']` | Yes | — | — | — |
+| `output_directory` | `str \| Path` | Yes | — | — | — |
+| `filename` | `str \| None` | No | `None` | — | — |
+| `format` | `Literal['json_lines', 'proto']` | No | `'json_lines'` | — | — |
+| `mode` | `Literal['append', 'overwrite']` | No | `'overwrite'` | — | — |
+| `mark_projection` | `Literal['inherit', 'event', 'tool']` | No | `'inherit'` | — | — |
+| `mark_exclude_names` | `list[str]` | No | `<generated>` | — | — |
+| `attribute_mappings` | `list[dict[str, str]]` | No | `list()` | — | — |
+| `resource_attributes` | `dict[str, str]` | No | `dict()` | — | — |
+| `service_name` | `str` | No | `'unknown_service'` | — | — |
+| `service_namespace` | `str \| None` | No | `None` | — | — |
+| `service_version` | `str \| None` | No | `None` | — | — |
+| `instrumentation_scope` | `str` | No | `'opentelemetry'` | — | — |
+
+---
+
+### <kbd>property</kbd> extra_fields
+
+Return fields preserved by the extension point for this model.
+
+---
+
+### <kbd>property</kbd> model_extra
+
+Get extra fields set during validation.
+
+
+
+**Returns:**
+  A dictionary of extra fields, or `None` if `config.extra` is not set to `"allow"`.
+
+---
+
+### <kbd>property</kbd> model_fields_set
+
+Returns the set of fields that have been explicitly set on this model instance.
+
+
+
+**Returns:**
+  A set of strings representing the fields that have been set,  i.e. that were not filled from defaults.
+
+
+
+---
+
+
+### <kbd>classmethod</kbd> `from_mapping`
+
+```python
+def from_mapping(value: Mapping[str, Any]) -> Self
+```
+
+Validate a mapping using this Pydantic model.
+
+---
+
+
+### <kbd>method</kbd> `to_mapping`
+
+```python
+def to_mapping() -> dict[str, Any]
+```
+
+Return a detached JSON-compatible mapping for Rust/core calls.
+
+
+---
+
+
 ## <kbd>class</kbd> `RelayOpenTelemetryConfig`
 
 NeMo Relay typed OpenTelemetry destination configuration.
@@ -1711,6 +1793,7 @@ The model defines the following fields:
 | --- | --- | --- | --- | --- | --- |
 | `enabled` | `bool` | No | `False` | — | — |
 | `endpoints` | `list[RelayOpenTelemetryEndpointConfig]` | No | `list()` | — | — |
+| `file_sinks` | `list[RelayOpenTelemetryFileSinkConfig]` | No | `list()` | — | — |
 
 ---
 

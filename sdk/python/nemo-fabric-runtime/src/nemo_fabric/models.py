@@ -718,11 +718,47 @@ class RelayOpenTelemetryEndpointConfig(FabricBaseModel):
     timeout_millis: int = 3000
 
 
+class RelayOpenTelemetryFileSinkConfig(FabricBaseModel):
+    """One local-file NeMo Relay OpenTelemetry destination."""
+
+    type: Literal["full", "gen_ai", "openinference"]
+    output_directory: str | Path
+    filename: str | None = None
+    format: Literal["json_lines", "proto"] = "json_lines"
+    mode: Literal["append", "overwrite"] = "overwrite"
+    mark_projection: Literal["inherit", "event", "tool"] = "inherit"
+    mark_exclude_names: list[str] = Field(default_factory=lambda: ["llm.chunk"])
+    attribute_mappings: list[dict[str, str]] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    resource_attributes: dict[str, str] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    service_name: str = "unknown_service"
+    service_namespace: str | None = None
+    service_version: str | None = None
+    instrumentation_scope: str = "opentelemetry"
+
+    @field_validator("output_directory", mode="after")
+    @classmethod
+    def _validate_output_directory(cls, value: str | Path) -> str | Path:
+        text = value if isinstance(value, str) else str(value)
+        if not text.strip():
+            raise ValueError(
+                "NeMo Relay OpenTelemetry file sink output_directory must be "
+                "a non-empty string"
+            )
+        return value
+
+
 class RelayOpenTelemetryConfig(FabricBaseModel):
     """NeMo Relay typed OpenTelemetry destination configuration."""
 
     enabled: bool = False
     endpoints: list[RelayOpenTelemetryEndpointConfig] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    file_sinks: list[RelayOpenTelemetryFileSinkConfig] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
 
@@ -735,9 +771,10 @@ class RelayOpenTelemetryConfig(FabricBaseModel):
                 "NeMo Relay observability config version 3 requires exporter "
                 f"fields inside opentelemetry.endpoints: {fields}"
             )
-        if self.enabled and not self.endpoints:
+        if self.enabled and not self.endpoints and not self.file_sinks:
             raise ValueError(
-                "enabled NeMo Relay OpenTelemetry requires at least one endpoint"
+                "enabled NeMo Relay OpenTelemetry requires at least one "
+                "endpoint or file sink"
             )
         return self
 
@@ -850,10 +887,16 @@ class RelayConfig(FabricBaseModel):
                     "NeMo Relay opentelemetry.endpoints must be a list for "
                     f"relay.components[{index}]"
                 )
-            if enabled and not endpoints:
+            file_sinks = opentelemetry.get("file_sinks")
+            if "file_sinks" in opentelemetry and not isinstance(file_sinks, list):
+                raise ValueError(
+                    "NeMo Relay opentelemetry.file_sinks must be a list for "
+                    f"relay.components[{index}]"
+                )
+            if enabled and not endpoints and not file_sinks:
                 raise ValueError(
                     "enabled NeMo Relay OpenTelemetry requires at least one "
-                    f"endpoint for relay.components[{index}]"
+                    f"endpoint or file sink for relay.components[{index}]"
                 )
             for endpoint_index, endpoint_config in enumerate(endpoints or []):
                 if not isinstance(endpoint_config, Mapping):
@@ -881,6 +924,45 @@ class RelayConfig(FabricBaseModel):
                         "string for "
                         f"relay.components[{index}].config.opentelemetry."
                         f"endpoints[{endpoint_index}].endpoint"
+                    )
+            for sink_index, sink_config in enumerate(file_sinks or []):
+                if not isinstance(sink_config, Mapping):
+                    raise ValueError(
+                        "NeMo Relay OpenTelemetry file sink must be an object for "
+                        f"relay.components[{index}].config.opentelemetry."
+                        f"file_sinks[{sink_index}]"
+                    )
+                sink_type = sink_config.get("type")
+                if sink_type not in {"full", "gen_ai", "openinference"}:
+                    raise ValueError(
+                        "NeMo Relay OpenTelemetry file sink type must be one of "
+                        "'full', 'gen_ai', or 'openinference' for "
+                        f"relay.components[{index}].config.opentelemetry."
+                        f"file_sinks[{sink_index}].type"
+                    )
+                output_directory = sink_config.get("output_directory")
+                if not isinstance(output_directory, str) or not output_directory.strip():
+                    raise ValueError(
+                        "NeMo Relay OpenTelemetry file sink output_directory must "
+                        "be a non-empty string for "
+                        f"relay.components[{index}].config.opentelemetry."
+                        f"file_sinks[{sink_index}].output_directory"
+                    )
+                sink_format = sink_config.get("format", "json_lines")
+                if sink_format not in {"json_lines", "proto"}:
+                    raise ValueError(
+                        "NeMo Relay OpenTelemetry file sink format must be one of "
+                        "'json_lines' or 'proto' for "
+                        f"relay.components[{index}].config.opentelemetry."
+                        f"file_sinks[{sink_index}].format"
+                    )
+                sink_mode = sink_config.get("mode", "overwrite")
+                if sink_mode not in {"append", "overwrite"}:
+                    raise ValueError(
+                        "NeMo Relay OpenTelemetry file sink mode must be one of "
+                        "'append' or 'overwrite' for "
+                        f"relay.components[{index}].config.opentelemetry."
+                        f"file_sinks[{sink_index}].mode"
                     )
         return self
 

@@ -46,6 +46,7 @@ from nemo_fabric import RelayConfigPolicy
 from nemo_fabric import RelayObservabilityConfig
 from nemo_fabric import RelayOpenTelemetryConfig
 from nemo_fabric import RelayOpenTelemetryEndpointConfig
+from nemo_fabric import RelayOpenTelemetryFileSinkConfig
 from nemo_fabric import RunOutput
 from nemo_fabric import RunPlan
 from nemo_fabric import RunRequest
@@ -1109,7 +1110,17 @@ def test_relay_generic_observability_component_reports_version_before_v3_shape()
     [
         ({"enabled": True}, False),
         ({"enabled": True, "endpoints": []}, False),
+        ({"enabled": True, "endpoints": [], "file_sinks": []}, False),
         ({"enabled": False, "endpoints": []}, True),
+        (
+            {
+                "enabled": True,
+                "file_sinks": [
+                    {"type": "full", "output_directory": "/tmp/relay-traces"}
+                ],
+            },
+            True,
+        ),
     ],
 )
 def test_relay_generic_observability_component_requires_enabled_endpoint(
@@ -1143,6 +1154,48 @@ def test_relay_generic_observability_component_requires_enabled_endpoint(
         ({"enabled": "true"}, r"opentelemetry\.enabled must be a boolean"),
         ({"endpoints": None}, r"opentelemetry\.endpoints must be a list"),
         ({"endpoints": "endpoint"}, r"opentelemetry\.endpoints must be a list"),
+        ({"file_sinks": None}, r"opentelemetry\.file_sinks must be a list"),
+        ({"file_sinks": "sink"}, r"opentelemetry\.file_sinks must be a list"),
+        (
+            {"file_sinks": [False]},
+            r"file sink must be an object for relay\.components\[0\]",
+        ),
+        (
+            {"file_sinks": [{"output_directory": "/tmp/relay-traces"}]},
+            r"file sink type must be one of .*file_sinks\[0\]\.type",
+        ),
+        (
+            {"file_sinks": [{"type": "zipkin", "output_directory": "/tmp/x"}]},
+            r"file sink type must be one of .*file_sinks\[0\]\.type",
+        ),
+        (
+            {"file_sinks": [{"type": "full"}]},
+            r"output_directory must be a non-empty string",
+        ),
+        (
+            {"file_sinks": [{"type": "full", "output_directory": "   "}]},
+            r"output_directory must be a non-empty string",
+        ),
+        (
+            {
+                "file_sinks": [
+                    {
+                        "type": "full",
+                        "output_directory": "/tmp/x",
+                        "format": "yaml",
+                    }
+                ]
+            },
+            r"file sink format must be one of",
+        ),
+        (
+            {
+                "file_sinks": [
+                    {"type": "full", "output_directory": "/tmp/x", "mode": "sync"}
+                ]
+            },
+            r"file sink mode must be one of",
+        ),
         (
             {"endpoints": [False]},
             r"endpoint must be an object for relay\.components\[0\]",
@@ -1232,6 +1285,57 @@ def test_relay_generic_observability_component_requires_nonblank_endpoint(endpoi
                 }
             ]
         )
+
+
+def test_relay_opentelemetry_file_sink_only_config_is_valid():
+    config = RelayOpenTelemetryConfig(
+        enabled=True,
+        file_sinks=[
+            RelayOpenTelemetryFileSinkConfig(
+                type="full", output_directory="/tmp/relay-traces"
+            )
+        ],
+    )
+    assert config.model_dump()["file_sinks"] == [
+        {
+            "type": "full",
+            "output_directory": "/tmp/relay-traces",
+            "filename": None,
+            "format": "json_lines",
+            "mode": "overwrite",
+            "mark_projection": "inherit",
+            "mark_exclude_names": ["llm.chunk"],
+            "service_name": "unknown_service",
+            "service_namespace": None,
+            "service_version": None,
+            "instrumentation_scope": "opentelemetry",
+        }
+    ]
+
+
+def test_relay_opentelemetry_config_omits_absent_file_sinks():
+    assert "file_sinks" not in RelayOpenTelemetryConfig().model_dump()
+    assert "endpoints" not in RelayOpenTelemetryConfig().model_dump()
+
+
+def test_relay_opentelemetry_config_requires_a_destination_when_enabled():
+    with pytest.raises(ValidationError, match="at least one endpoint or file sink"):
+        RelayOpenTelemetryConfig(enabled=True)
+
+
+@pytest.mark.parametrize(
+    "sink",
+    [
+        {"type": "full", "output_directory": ""},
+        {"type": "full", "output_directory": "   "},
+        {"type": "full", "output_directory": "/tmp/x", "format": "yaml"},
+        {"type": "full", "output_directory": "/tmp/x", "mode": "sync"},
+        {"type": "zipkin", "output_directory": "/tmp/x"},
+    ],
+)
+def test_relay_opentelemetry_file_sink_config_rejects_invalid_inputs(sink):
+    with pytest.raises(ValidationError):
+        RelayOpenTelemetryFileSinkConfig(**sink)
 
 
 @pytest.mark.parametrize(
